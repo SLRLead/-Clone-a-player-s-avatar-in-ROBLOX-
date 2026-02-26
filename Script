@@ -1,0 +1,640 @@
+-- Avatar Inspector - In-Game Tool
+-- View player outfits and copy marketplace links locally
+-- Place in StarterPlayer > StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local StarterGui = game:GetService("StarterGui")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Asset type names mapping
+local ASSET_TYPES = {
+    [2] = "T-Shirt",
+    [8] = "Hat",
+    [11] = "Shirt",
+    [12] = "Pants",
+    [17] = "Head",
+    [18] = "Face",
+    [19] = "Gear",
+    [25] = "Animation",
+    [28] = "Torso",
+    [29] = "Right Arm",
+    [30] = "Left Arm",
+    [31] = "Left Leg",
+    [32] = "Right Leg",
+    [41] = "Hair",
+    [42] = "Neck",
+    [43] = "Shoulder",
+    [44] = "Front",
+    [45] = "Back",
+    [46] = "Waist",
+    [47] = "Climb Animation",
+    [48] = "Fall Animation",
+    [49] = "Idle Animation",
+    [50] = "Jump Animation",
+    [51] = "Run Animation",
+    [52] = "Swim Animation",
+    [53] = "Walk Animation",
+    [54] = "Pose Animation",
+    [61] = "Emote Animation",
+    [67] = "Video",
+    [68] = "T-Shirt Accessory",
+    [69] = "Shirt Accessory",
+    [70] = "Pants Accessory",
+    [71] = "Jacket Accessory",
+    [72] = "Sweater Accessory",
+    [73] = "Shorts Accessory",
+    [74] = "Left Shoe",
+    [75] = "Right Shoe",
+    [76] = "Dress Skirt",
+    [77] = "Left Shoe",
+    [78] = "Right Shoe",
+    [79] = "Eyebrow",
+    [80] = "Eyelash",
+    [81] = "Mood Animation",
+}
+
+-- Remove existing GUI
+local existingGui = PlayerGui:FindFirstChild("AvatarInspector")
+if existingGui then
+    existingGui:Destroy()
+end
+
+-- Create ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AvatarInspector"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 1000
+ScreenGui.Parent = PlayerGui
+
+-- Main Frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 450, 0, 550)
+MainFrame.Position = UDim2.new(0.5, -225, 0.5, -275)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.BackgroundTransparency = 0.05
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 16)
+UICorner.Parent = MainFrame
+
+-- Shadow
+local Shadow = Instance.new("ImageLabel")
+Shadow.Name = "Shadow"
+Shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+Shadow.BackgroundTransparency = 1
+Shadow.Position = UDim2.new(0.5, 0, 0.5, 6)
+Shadow.Size = UDim2.new(1, 30, 1, 30)
+Shadow.ZIndex = -1
+Shadow.Image = "rbxassetid://5554236805"
+Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+Shadow.ImageTransparency = 0.5
+Shadow.ScaleType = Enum.ScaleType.Slice
+Shadow.SliceCenter = Rect.new(23, 23, 277, 277)
+Shadow.Parent = MainFrame
+
+-- Title Bar
+local TitleBar = Instance.new("Frame")
+TitleBar.Name = "TitleBar"
+TitleBar.Size = UDim2.new(1, 0, 0, 50)
+TitleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 16)
+TitleCorner.Parent = TitleBar
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Name = "TitleLabel"
+TitleLabel.Size = UDim2.new(1, -100, 1, 0)
+TitleLabel.Position = UDim2.new(0, 20, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "👤 AVATAR INSPECTOR"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 20
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TitleBar
+
+-- Close Button
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Size = UDim2.new(0, 36, 0, 36)
+CloseButton.Position = UDim2.new(1, -46, 0, 7)
+CloseButton.BackgroundColor3 = Color3.fromRGB(255, 70, 70)
+CloseButton.BorderSizePixel = 0
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Text = "✕"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 18
+CloseButton.Parent = TitleBar
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 10)
+CloseCorner.Parent = CloseButton
+
+-- Player Selection Dropdown
+local DropdownFrame = Instance.new("Frame")
+DropdownFrame.Name = "DropdownFrame"
+DropdownFrame.Size = UDim2.new(1, -40, 0, 50)
+DropdownFrame.Position = UDim2.new(0, 20, 0, 70)
+DropdownFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+DropdownFrame.BorderSizePixel = 0
+DropdownFrame.Parent = MainFrame
+
+local DropdownCorner = Instance.new("UICorner")
+DropdownCorner.CornerRadius = UDim.new(0, 10)
+DropdownCorner.Parent = DropdownFrame
+
+local DropdownButton = Instance.new("TextButton")
+DropdownButton.Name = "DropdownButton"
+DropdownButton.Size = UDim2.new(1, 0, 1, 0)
+DropdownButton.BackgroundTransparency = 1
+DropdownButton.Font = Enum.Font.GothamBold
+DropdownButton.Text = "Select a Player ▼"
+DropdownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+DropdownButton.TextSize = 16
+DropdownButton.Parent = DropdownFrame
+
+local DropdownArrow = Instance.new("TextLabel")
+DropdownArrow.Name = "Arrow"
+DropdownArrow.Size = UDim2.new(0, 30, 1, 0)
+DropdownArrow.Position = UDim2.new(1, -40, 0, 0)
+DropdownArrow.BackgroundTransparency = 1
+DropdownArrow.Font = Enum.Font.GothamBold
+DropdownArrow.Text = "▼"
+DropdownArrow.TextColor3 = Color3.fromRGB(200, 200, 200)
+DropdownArrow.TextSize = 14
+DropdownArrow.Parent = DropdownFrame
+
+-- Dropdown List (Scrollable)
+local DropdownList = Instance.new("ScrollingFrame")
+DropdownList.Name = "DropdownList"
+DropdownList.Size = UDim2.new(1, 0, 0, 200)
+DropdownList.Position = UDim2.new(0, 0, 1, 5)
+DropdownList.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+DropdownList.BorderSizePixel = 0
+DropdownList.ScrollBarThickness = 6
+DropdownList.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 110)
+DropdownList.Visible = false
+DropdownList.ZIndex = 10
+DropdownList.Parent = DropdownFrame
+
+local ListCorner = Instance.new("UICorner")
+ListCorner.CornerRadius = UDim.new(0, 10)
+ListCorner.Parent = DropdownList
+
+local ListLayout = Instance.new("UIListLayout")
+ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ListLayout.Padding = UDim.new(0, 2)
+ListLayout.Parent = DropdownList
+
+-- Selected Player Display
+local SelectedPlayerFrame = Instance.new("Frame")
+SelectedPlayerFrame.Name = "SelectedPlayer"
+SelectedPlayerFrame.Size = UDim2.new(1, -40, 0, 80)
+SelectedPlayerFrame.Position = UDim2.new(0, 20, 0, 130)
+SelectedPlayerFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+SelectedPlayerFrame.BorderSizePixel = 0
+SelectedPlayerFrame.Visible = false
+SelectedPlayerFrame.Parent = MainFrame
+
+local SelectedCorner = Instance.new("UICorner")
+SelectedCorner.CornerRadius = UDim.new(0, 12)
+SelectedCorner.Parent = SelectedPlayerFrame
+
+local PlayerAvatar = Instance.new("ImageLabel")
+PlayerAvatar.Name = "Avatar"
+PlayerAvatar.Size = UDim2.new(0, 60, 0, 60)
+PlayerAvatar.Position = UDim2.new(0, 10, 0, 10)
+PlayerAvatar.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+PlayerAvatar.BorderSizePixel = 0
+PlayerAvatar.Image = ""
+PlayerAvatar.Parent = SelectedPlayerFrame
+
+local AvatarCorner = Instance.new("UICorner")
+AvatarCorner.CornerRadius = UDim.new(0, 8)
+AvatarCorner.Parent = PlayerAvatar
+
+local PlayerNameLabel = Instance.new("TextLabel")
+PlayerNameLabel.Name = "PlayerName"
+PlayerNameLabel.Size = UDim2.new(1, -90, 0, 30)
+PlayerNameLabel.Position = UDim2.new(0, 80, 0, 10)
+PlayerNameLabel.BackgroundTransparency = 1
+PlayerNameLabel.Font = Enum.Font.GothamBold
+PlayerNameLabel.Text = ""
+PlayerNameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+PlayerNameLabel.TextSize = 18
+PlayerNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+PlayerNameLabel.Parent = SelectedPlayerFrame
+
+local ItemCountLabel = Instance.new("TextLabel")
+ItemCountLabel.Name = "ItemCount"
+ItemCountLabel.Size = UDim2.new(1, -90, 0, 25)
+ItemCountLabel.Position = UDim2.new(0, 80, 0, 40)
+ItemCountLabel.BackgroundTransparency = 1
+ItemCountLabel.Font = Enum.Font.Gotham
+ItemCountLabel.Text = "Loading items..."
+ItemCountLabel.TextColor3 = Color3.fromRGB(180, 180, 190)
+ItemCountLabel.TextSize = 14
+ItemCountLabel.TextXAlignment = Enum.TextXAlignment.Left
+ItemCountLabel.Parent = SelectedPlayerFrame
+
+-- Items List
+local ItemsFrame = Instance.new("Frame")
+ItemsFrame.Name = "ItemsFrame"
+ItemsFrame.Size = UDim2.new(1, -40, 1, -230)
+ItemsFrame.Position = UDim2.new(0, 20, 0, 220)
+ItemsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+ItemsFrame.BorderSizePixel = 0
+ItemsFrame.Parent = MainFrame
+
+local ItemsCorner = Instance.new("UICorner")
+ItemsCorner.CornerRadius = UDim.new(0, 12)
+ItemsCorner.Parent = ItemsFrame
+
+local ItemsTitle = Instance.new("TextLabel")
+ItemsTitle.Name = "Title"
+ItemsTitle.Size = UDim2.new(1, -20, 0, 30)
+ItemsTitle.Position = UDim2.new(0, 10, 0, 10)
+ItemsTitle.BackgroundTransparency = 1
+ItemsTitle.Font = Enum.Font.GothamBold
+ItemsTitle.Text = "Equipped Items"
+ItemsTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+ItemsTitle.TextSize = 16
+ItemsTitle.TextXAlignment = Enum.TextXAlignment.Left
+ItemsTitle.Parent = ItemsFrame
+
+-- Items Scroll List
+local ItemsScroll = Instance.new("ScrollingFrame")
+ItemsScroll.Name = "ItemsScroll"
+ItemsScroll.Size = UDim2.new(1, -20, 1, -50)
+ItemsScroll.Position = UDim2.new(0, 10, 0, 45)
+ItemsScroll.BackgroundTransparency = 1
+ItemsScroll.BorderSizePixel = 0
+ItemsScroll.ScrollBarThickness = 6
+ItemsScroll.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 110)
+ItemsScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+ItemsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+ItemsScroll.Parent = ItemsFrame
+
+local ItemsLayout = Instance.new("UIListLayout")
+ItemsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ItemsLayout.Padding = UDim.new(0, 8)
+ItemsLayout.Parent = ItemsScroll
+
+-- Notification Frame
+local NotificationFrame = Instance.new("Frame")
+NotificationFrame.Name = "Notification"
+NotificationFrame.Size = UDim2.new(0, 300, 0, 50)
+NotificationFrame.Position = UDim2.new(0.5, -150, 1, -70)
+NotificationFrame.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+NotificationFrame.BorderSizePixel = 0
+NotificationFrame.Visible = false
+NotificationFrame.Parent = ScreenGui
+
+local NotifCorner = Instance.new("UICorner")
+NotifCorner.CornerRadius = UDim.new(0, 10)
+NotifCorner.Parent = NotificationFrame
+
+local NotifText = Instance.new("TextLabel")
+NotifText.Name = "Text"
+NotifText.Size = UDim2.new(1, -20, 1, 0)
+NotifText.Position = UDim2.new(0, 10, 0, 0)
+NotifText.BackgroundTransparency = 1
+NotifText.Font = Enum.Font.GothamBold
+NotifText.Text = "Link copied to clipboard!"
+NotifText.TextColor3 = Color3.fromRGB(255, 255, 255)
+NotifText.TextSize = 16
+NotifText.Parent = NotificationFrame
+
+-- Animations
+local function tween(object, properties, duration)
+    TweenService:Create(object, TweenInfo.new(duration or 0.2, Enum.EasingStyle.Quad), properties):Play()
+end
+
+local function showNotification(text, color)
+    NotifText.Text = text
+    NotificationFrame.BackgroundColor3 = color or Color3.fromRGB(0, 200, 100)
+    NotificationFrame.Visible = true
+    NotificationFrame.Position = UDim2.new(0.5, -150, 1, 20)
+    
+    tween(NotificationFrame, {Position = UDim2.new(0.5, -150, 1, -70)}, 0.3)
+    
+    task.delay(2, function()
+        tween(NotificationFrame, {Position = UDim2.new(0.5, -150, 1, 20)}, 0.3)
+        task.wait(0.3)
+        NotificationFrame.Visible = false
+    end)
+end
+
+-- Populate Dropdown
+local function updateDropdown()
+    -- Clear existing
+    for _, child in ipairs(DropdownList:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local option = Instance.new("TextButton")
+            option.Name = player.Name
+            option.Size = UDim2.new(1, -10, 0, 40)
+            option.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
+            option.BorderSizePixel = 0
+            option.Font = Enum.Font.Gotham
+            option.Text = "  " .. player.Name
+            option.TextColor3 = Color3.fromRGB(255, 255, 255)
+            option.TextSize = 14
+            option.TextXAlignment = Enum.TextXAlignment.Left
+            option.Parent = DropdownList
+            
+            local optionCorner = Instance.new("UICorner")
+            optionCorner.CornerRadius = UDim.new(0, 8)
+            optionCorner.Parent = option
+            
+            option.MouseButton1Click:Connect(function()
+                selectPlayer(player)
+                DropdownList.Visible = false
+                DropdownButton.Text = player.Name .. " ▼"
+            end)
+        end
+    end
+    
+    DropdownList.CanvasSize = UDim2.new(0, 0, 0, #DropdownList:GetChildren() * 42)
+end
+
+-- Get HumanoidDescription safely
+local function getHumanoidDescription(player)
+    local character = player.Character
+    if not character then return nil end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return nil end
+    
+    return humanoid:GetAppliedDescription()
+end
+
+-- Create item card
+local function createItemCard(assetId, assetTypeId)
+    if assetId == 0 then return nil end
+    
+    local card = Instance.new("Frame")
+    card.Name = "Item_" .. assetId
+    card.Size = UDim2.new(1, -10, 0, 70)
+    card.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    card.BorderSizePixel = 0
+    
+    local cardCorner = Instance.new("UICorner")
+    cardCorner.CornerRadius = UDim.new(0, 10)
+    cardCorner.Parent = card
+    
+    -- Thumbnail
+    local thumbnail = Instance.new("ImageLabel")
+    thumbnail.Name = "Thumbnail"
+    thumbnail.Size = UDim2.new(0, 50, 0, 50)
+    thumbnail.Position = UDim2.new(0, 10, 0, 10)
+    thumbnail.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    thumbnail.BorderSizePixel = 0
+    thumbnail.Image = "rbxthumb://type=Asset&id=" .. assetId .. "&w=150&h=150"
+    thumbnail.Parent = card
+    
+    local thumbCorner = Instance.new("UICorner")
+    thumbCorner.CornerRadius = UDim.new(0, 8)
+    thumbCorner.Parent = thumbnail
+    
+    -- Asset Type Label
+    local typeLabel = Instance.new("TextLabel")
+    typeLabel.Name = "Type"
+    typeLabel.Size = UDim2.new(0, 120, 0, 20)
+    typeLabel.Position = UDim2.new(0, 70, 0, 10)
+    typeLabel.BackgroundTransparency = 1
+    typeLabel.Font = Enum.Font.GothamBold
+    typeLabel.Text = ASSET_TYPES[assetTypeId] or "Item"
+    typeLabel.TextColor3 = Color3.fromRGB(0, 170, 255)
+    typeLabel.TextSize = 12
+    typeLabel.TextXAlignment = Enum.TextXAlignment.Left
+    typeLabel.Parent = card
+    
+    -- Asset ID
+    local idLabel = Instance.new("TextLabel")
+    idLabel.Name = "AssetId"
+    idLabel.Size = UDim2.new(0, 150, 0, 18)
+    idLabel.Position = UDim2.new(0, 70, 0, 32)
+    idLabel.BackgroundTransparency = 1
+    idLabel.Font = Enum.Font.Gotham
+    idLabel.Text = "ID: " .. assetId
+    idLabel.TextColor3 = Color3.fromRGB(180, 180, 190)
+    idLabel.TextSize = 12
+    idLabel.TextXAlignment = Enum.TextXAlignment.Left
+    idLabel.Parent = card
+    
+    -- Copy Link Button
+    local copyButton = Instance.new("TextButton")
+    copyButton.Name = "CopyButton"
+    copyButton.Size = UDim2.new(0, 80, 0, 32)
+    copyButton.Position = UDim2.new(1, -95, 0.5, -16)
+    copyButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    copyButton.BorderSizePixel = 0
+    copyButton.Font = Enum.Font.GothamBold
+    copyButton.Text = "COPY LINK"
+    copyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    copyButton.TextSize = 11
+    copyButton.Parent = card
+    
+    local copyCorner = Instance.new("UICorner")
+    copyCorner.CornerRadius = UDim.new(0, 8)
+    copyCorner.Parent = copyButton
+    
+    -- Hover effects
+    copyButton.MouseEnter:Connect(function()
+        tween(copyButton, {BackgroundColor3 = Color3.fromRGB(0, 190, 255)})
+    end)
+    
+    copyButton.MouseLeave:Connect(function()
+        tween(copyButton, {BackgroundColor3 = Color3.fromRGB(0, 170, 255)})
+    end)
+    
+    copyButton.MouseButton1Click:Connect(function()
+        local url = "https://www.roblox.com/catalog/" .. assetId
+        -- Copy to clipboard using setclipboard if available (executors) or just show the link
+        if setclipboard then
+            setclipboard(url)
+            showNotification("Link copied to clipboard!", Color3.fromRGB(0, 200, 100))
+        else
+            -- For regular Roblox, we can't access clipboard, so we show the link
+            showNotification("URL: " .. url, Color3.fromRGB(0, 170, 255))
+            print("Marketplace URL:", url)
+        end
+    end)
+    
+    return card
+end
+
+-- Select player and show items
+local currentSelectedPlayer = nil
+
+function selectPlayer(player)
+    currentSelectedPlayer = player
+    
+    -- Update UI
+    SelectedPlayerFrame.Visible = true
+    PlayerNameLabel.Text = player.Name
+    PlayerAvatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=150&h=150"
+    
+    -- Clear previous items
+    for _, child in ipairs(ItemsScroll:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+    
+    -- Get character appearance
+    local desc = getHumanoidDescription(player)
+    if not desc then
+        ItemCountLabel.Text = "Character not loaded"
+        return
+    end
+    
+    local items = {}
+    
+    -- Collect all equipped items
+    local assetTypes = {
+        {id = 2, value = desc.GraphicTShirt},
+        {id = 11, value = desc.Shirt},
+        {id = 12, value = desc.Pants},
+        {id = 17, value = desc.Head},
+        {id = 18, value = desc.Face},
+    }
+    
+    -- Add accessories
+    for _, accessory in ipairs(desc:GetAccessories(true)) do
+        table.insert(items, {id = accessory.AssetId, type = accessory.AccessoryType.Value + 67})
+    end
+    
+    -- Add clothing
+    for _, asset in ipairs(assetTypes) do
+        if asset.value > 0 then
+            table.insert(items, {id = asset.value, type = asset.id})
+        end
+    end
+    
+    -- Add body parts
+    if desc.Head > 0 then table.insert(items, {id = desc.Head, type = 17}) end
+    if desc.Torso > 0 then table.insert(items, {id = desc.Torso, type = 28}) end
+    
+    ItemCountLabel.Text = #items .. " items equipped"
+    
+    -- Create cards
+    for _, item in ipairs(items) do
+        local card = createItemCard(item.id, item.type)
+        if card then
+            card.Parent = ItemsScroll
+        end
+    end
+    
+    ItemsScroll.CanvasSize = UDim2.new(0, 0, 0, #ItemsScroll:GetChildren() * 78)
+end
+
+-- Dropdown toggle
+local dropdownOpen = false
+DropdownButton.MouseButton1Click:Connect(function()
+    dropdownOpen = not dropdownOpen
+    DropdownList.Visible = dropdownOpen
+    DropdownArrow.Text = dropdownOpen and "▲" or "▼"
+    updateDropdown()
+end)
+
+-- Close button
+CloseButton.MouseButton1Click:Connect(function()
+    tween(MainFrame, {Size = UDim2.new(0, 0, 0, 0), Position = UDim2.new(0.5, 0, 0.5, 0)}, 0.3)
+    task.wait(0.3)
+    ScreenGui.Enabled = false
+end)
+
+-- Hover effects
+CloseButton.MouseEnter:Connect(function()
+    tween(CloseButton, {BackgroundColor3 = Color3.fromRGB(255, 90, 90)})
+end)
+
+CloseButton.MouseLeave:Connect(function()
+    tween(CloseButton, {BackgroundColor3 = Color3.fromRGB(255, 70, 70)})
+end)
+
+-- Make draggable
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(
+            startPos.X.Scale, 
+            startPos.X.Offset + delta.X, 
+            startPos.Y.Scale, 
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- Toggle GUI with RightControl
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.RightControl then
+        ScreenGui.Enabled = not ScreenGui.Enabled
+        if ScreenGui.Enabled then
+            MainFrame.Size = UDim2.new(0, 0, 0, 0)
+            tween(MainFrame, {Size = UDim2.new(0, 450, 0, 550)}, 0.3)
+            updateDropdown()
+        end
+    end
+end)
+
+-- Update when players join/leave
+Players.PlayerAdded:Connect(function()
+    if dropdownOpen then updateDropdown() end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if currentSelectedPlayer == player then
+        currentSelectedPlayer = nil
+        SelectedPlayerFrame.Visible = false
+        for _, child in ipairs(ItemsScroll:GetChildren()) do
+            if child:IsA("Frame") then child:Destroy() end
+        end
+        DropdownButton.Text = "Select a Player ▼"
+    end
+    if dropdownOpen then updateDropdown() end
+end)
+
+print("✅ Avatar Inspector loaded!")
+print("Press RightControl to toggle")
+print("Select a player to view their equipped items")
+print("Click COPY LINK to get the marketplace URL")
